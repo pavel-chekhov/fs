@@ -68,6 +68,40 @@ var Calculator = {
     size: '',
     ft: 1,
     price: 3000,
+
+    settings: {
+        minPrice: 3000,
+        specialPriceThreshold: 250,
+        specialPriceText: 'Contact us for a special price*!'
+    },
+
+    price_config: {
+        'basic-privacy': {
+            '6-x-6': [
+                { maxExclusive: 80, rate: 70 },
+                { maxExclusive: 150, rate: 68 },
+                { maxInclusive: 250, rate: 65 }
+            ],
+            '4-x-4': [
+                { maxExclusive: 80, rate: 65 },
+                { maxExclusive: 150, rate: 63 },
+                { maxInclusive: 250, rate: 60 }
+            ]
+        },
+        'full-or-semi-privacy': {
+            '6-x-6': [
+                { maxExclusive: 80, rate: 75 },
+                { maxExclusive: 150, rate: 72 },
+                { maxInclusive: 250, rate: 70 }
+            ],
+            '4-x-4': [
+                { maxExclusive: 80, rate: 71 },
+                { maxExclusive: 150, rate: 68 },
+                { maxInclusive: 250, rate: 65 }
+            ]
+        }
+    },
+
     fields: {
         37: 'price',
         38: 'client_id_google',
@@ -84,121 +118,146 @@ var Calculator = {
         79: '_fbp',
         80: '_fbc'
     },
+
     field_value: {
         price: undefined,
         linear_feet: undefined,
         post_size: undefined,
         fence_style: undefined
     },
+
     get: function() {
-        this.style = document.querySelector('input[name="nf-field-24"]:checked').value;
-        this.field_value.fence_style = document.querySelector('input[name="nf-field-24"]:checked').value;
+        var styleInput = document.querySelector('input[name="nf-field-24"]:checked');
+        var sizeInput = document.querySelector('input[name="nf-field-25"]:checked');
+        var ftInput = document.querySelector('input[name="nf-field-26"]');
 
-        this.size = document.querySelector('input[name="nf-field-25"]:checked').value;
-        this.field_value.post_size = document.querySelector('input[name="nf-field-25"]:checked').value;
+        this.style = styleInput ? styleInput.value : '';
+        this.field_value.fence_style = this.style;
 
-        this.ft = document.querySelector('input[name="nf-field-26"]').value;
-        this.field_value.linear_feet = document.querySelector('input[name="nf-field-26"]').value;
+        this.size = sizeInput ? sizeInput.value : '';
+        this.field_value.post_size = this.size;
+
+        var ftRaw = ftInput ? ftInput.value : '';
+        var ftParsed = parseFloat(ftRaw);
+
+        this.ft = isNaN(ftParsed) ? 0 : ftParsed;
+        this.field_value.linear_feet = ftRaw;
     },
+
     getCookie: function(name) {
         var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
         return match ? match[2] : null;
     },
+
+    getRate: function(style, size, ft) {
+        var sizeRules = this.price_config[style] && this.price_config[style][size];
+
+        if (!sizeRules) {
+            return null;
+        }
+
+        for (var i = 0; i < sizeRules.length; i++) {
+            var rule = sizeRules[i];
+
+            if (typeof rule.maxExclusive !== 'undefined' && ft < rule.maxExclusive) {
+                return rule.rate;
+            }
+
+            if (typeof rule.maxInclusive !== 'undefined' && ft <= rule.maxInclusive) {
+                return rule.rate;
+            }
+        }
+
+        return null;
+    },
+
     updateFields: function() {
+        var params = typeof window.getAllUrlParams === 'function' ? window.getAllUrlParams() : {};
+
         for (var key in this.fields) {
-            var a = this.fields[key];
+            if (!this.fields.hasOwnProperty(key)) continue;
+
+            var fieldName = this.fields[key];
             var value = '';
 
-            switch (a) {
+            switch (fieldName) {
                 case 'price':
-                    value = this.price;
-                    jQuery( '#nf-field-' + key ).val( value ).trigger( 'change' );
+                    value = this.price == null ? '' : this.price;
                     break;
+
                 case 'client_id_google':
-                    if (!gaGlobal) {
+                    if (typeof gaGlobal === 'undefined' || !gaGlobal || !gaGlobal.vid) {
                         value = 'not set';
                     } else {
                         value = gaGlobal.vid;
                     }
-                    jQuery( '#nf-field-' + key ).val( value ).trigger( 'change' );
                     break;
+
                 case 'referrer':
                     value = document.referrer;
-                    jQuery( '#nf-field-' + key ).val( value ).trigger( 'change' );
                     break;
+
                 case 'url':
                     value = document.location.href;
-                    jQuery( '#nf-field-' + key ).val( value ).trigger( 'change' );
                     break;
+
                 case 'user_agent':
                     value = navigator.userAgent;
-                    jQuery( '#nf-field-' + key ).val( value ).trigger( 'change' );
                     break;
+
                 case '_fbp':
-                    value = this.getCookie(a);
-                    jQuery( '#nf-field-' + key ).val( value ).trigger( 'change' );
+                    value = this.getCookie(fieldName);
                     break;
+
                 case '_fbc':
-                    value = this.getCookie(a) || window.fbc_;
-                    jQuery( '#nf-field-' + key ).val( value ).trigger( 'change' );
+                    value = this.getCookie(fieldName) || window.fbc_ || '';
                     break;
+
                 default:
-                    params = window.getAllUrlParams();
-                    if (!!params[a]) {
-                        value = params[a];
-                        jQuery( '#nf-field-' + key ).val( value ).trigger( 'change' );
+                    if (params[fieldName]) {
+                        value = params[fieldName];
                     }
+                    break;
             }
+
+            jQuery('#nf-field-' + key).val(value).trigger('change');
         }
     },
+
     get_price: function() {
         this.get();
-        switch (this.style) {
-          case 'basic-privacy':
-            switch (this.size) {
-                case '4-x-4':
-                    if (this.ft < 80) {this.price = this.ft * 62;} else {
-                        if (this.ft >= 250) {this.price = this.ft * 56;} else { this.price = this.ft * 57;}
-                    }
-                    break;
-                default: // 6-x-6
-                    if (this.ft < 80) {this.price = this.ft * 65;} else {
-                        if (this.ft >= 250) {this.price = this.ft * 60;} else {
-                            if (this.ft >= 150) {this.price = this.ft * 60;} else {this.price = this.ft * 63;}
-                        }
-                    }
-            }
-            break;
-          case 'full-or-semi-privacy':
-            switch (this.size) {
-                case '4-x-4':
-                    if (this.ft < 80) {this.price = this.ft * 67;} else {
-                        if (this.ft >= 250) {this.price = this.ft * 61;} else { this.price = this.ft * 63;}
-                    }
-                    break;
-                default: // 6-x-6
-                    if (this.ft < 80) {this.price = this.ft * 70;} else {
-                        if (this.ft >= 250) {this.price = this.ft * 65;} else {
-                            if (this.ft >= 150) {this.price = this.ft * 65;} else {this.price = this.ft * 68;}
-                        }
-                    }
-            }
-            break;
-          default:
-            this.price = 3000;
-        }
-        console.log('price: ', this.price);
-        this.field_value.price = this.price;
-        dataLayer.push({'event': 'calculation', 'field_value': this.field_value});
-        if (this.price < 3000) { this.price = 3000; }
-        if (this.ft > 500) {
-            document.getElementById('price').textContent = 'Contact us for a special price*!';
+
+        var priceElement = document.getElementById('price');
+        var sizeKey = this.size === '4-x-4' || this.size === '6-x-6' ? this.size : '';
+        var rate = this.getRate(this.style, sizeKey, this.ft);
+        var isSpecialPrice = rate === null || this.ft > this.settings.specialPriceThreshold;
+
+        window.dataLayer = window.dataLayer || [];
+
+        if (isSpecialPrice) {
+            this.price = null;
+            this.field_value.price = null;
+            console.log('price: special');
         } else {
-            document.getElementById('price').textContent = '$' + this.price + '*';
+            this.price = Math.max(this.ft * rate, this.settings.minPrice);
+            this.field_value.price = this.price;
+            console.log('price:', this.price);
         }
+
+        dataLayer.push({
+            event: 'calculation',
+            field_value: this.field_value
+        });
+
+        if (priceElement) {
+            priceElement.textContent = isSpecialPrice
+                ? this.settings.specialPriceText
+                : '$' + this.price + '*';
+        }
+
         this.updateFields();
     }
-}
+};
 
 jQuery(document).ready(function() {
 	jQuery(document).on('click', '#calculate', Calculator.get_price.bind(Calculator));
