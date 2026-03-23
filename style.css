@@ -5919,12 +5919,10 @@ body .is-layout-flex{
 	margin: auto;
 	padding: 2em 0!important;
 }
-#page{
-	}
 #masthead{
 	width: 100%!important;
 	margin: 0 !important;
-	background: url("assets/images/header-bg.png") top center no-repeat;
+	background: url("https://www.fencesquad.ca/wp-content/uploads/2026/03/header_bg.jpg") top center no-repeat;
 	background-size: cover;
 	max-width: none;
 	padding: 1em 6em;
